@@ -1,0 +1,29 @@
+{
+  "name": "goalboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first monthly goal planner",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.electron.json && vite build",
+    "preview": "vite preview",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^16.18.126",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "concurrently": "^8.2.2",
+    "electron": "^25.9.8",
+    "typescript": "^5.4.5",
+    "vite": "^4.5.5",
+    "wait-on": "^7.2.0"
+  }
+}
