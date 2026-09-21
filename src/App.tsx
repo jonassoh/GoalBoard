@@ -10,7 +10,7 @@ import {
   Flame,
   Home,
   Minus,
-  MoreHorizontal,
+  Pencil,
   Plus,
   Target,
   Trash2,
@@ -143,9 +143,10 @@ function MiniCalendar({ selectedKey, dueDays }: { selectedKey: string; dueDays: 
   )
 }
 
-function GoalCard({ goal, onStep, onDelete }: {
+function GoalCard({ goal, onStep, onEdit, onDelete }: {
   goal: Goal
   onStep: (goalId: string, metricId: string, delta: number) => void
+  onEdit: (goal: Goal) => void
   onDelete: (goalId: string) => void
 }) {
   const progress = goalProgress(goal)
@@ -160,9 +161,14 @@ function GoalCard({ goal, onStep, onDelete }: {
           </div>
           <p>{goal.note || 'A little progress still counts.'}</p>
         </div>
-        <button className="icon-button menu-button" aria-label={`Delete ${goal.title}`} onClick={() => onDelete(goal.id)}>
-          <Trash2 size={17} />
-        </button>
+        <div className="goal-actions">
+          <button className="icon-button menu-button edit-button" aria-label={`Edit ${goal.title}`} onClick={() => onEdit(goal)}>
+            <Pencil size={16} />
+          </button>
+          <button className="icon-button menu-button" aria-label={`Delete ${goal.title}`} onClick={() => onDelete(goal.id)}>
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
       <div className="metric-list">
         {goal.metrics.map((metric) => {
@@ -190,22 +196,33 @@ function GoalCard({ goal, onStep, onDelete }: {
   )
 }
 
-type DraftMetric = { id: string; label: string; target: number }
+type DraftMetric = { id: string; label: string; target: number; completed: number }
 
-function GoalModal({ month, onClose, onCreate }: { month: string; onClose: () => void; onCreate: (goal: Goal) => void }) {
-  const [title, setTitle] = useState('')
-  const [note, setNote] = useState('')
-  const [dueDate, setDueDate] = useState(monthEnd(month))
-  const [metrics, setMetrics] = useState<DraftMetric[]>([{ id: uid(), label: '', target: 1 }])
+function GoalModal({ month, months, goal, onClose, onSave }: {
+  month: string
+  months: string[]
+  goal?: Goal
+  onClose: () => void
+  onSave: (goal: Goal) => void
+}) {
+  const [title, setTitle] = useState(goal?.title ?? '')
+  const [note, setNote] = useState(goal?.note ?? '')
+  const [goalMonth, setGoalMonth] = useState(goal?.monthKey ?? month)
+  const [dueDate, setDueDate] = useState(goal?.dueDate ?? monthEnd(month))
+  const [metrics, setMetrics] = useState<DraftMetric[]>(goal?.metrics.map((metric) => ({ ...metric })) ?? [{ id: uid(), label: '', target: 1, completed: 0 }])
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
     const validMetrics = metrics.filter((metric) => metric.label.trim() && metric.target > 0)
     if (!title.trim() || !validMetrics.length) return
-    onCreate({
-      id: uid(), title: title.trim(), note: note.trim(), monthKey: month, dueDate,
-      createdAt: new Date().toISOString(),
-      metrics: validMetrics.map((metric) => ({ ...metric, label: metric.label.trim(), completed: 0 })),
+    onSave({
+      id: goal?.id ?? uid(), title: title.trim(), note: note.trim(), monthKey: goalMonth, dueDate,
+      createdAt: goal?.createdAt ?? new Date().toISOString(),
+      metrics: validMetrics.map((metric) => ({
+        ...metric,
+        label: metric.label.trim(),
+        completed: Math.min(metric.completed, metric.target),
+      })),
     })
   }
 
@@ -216,15 +233,26 @@ function GoalModal({ month, onClose, onCreate }: { month: string; onClose: () =>
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <form className="modal" onSubmit={submit}>
         <div className="modal-header">
-          <div><p className="eyebrow">{displayMonth(month)}</p><h2>Add a new goal</h2></div>
+          <div><p className="eyebrow">{displayMonth(goalMonth)}</p><h2>{goal ? 'Edit goal' : 'Add a new goal'}</h2></div>
           <button type="button" className="icon-button" onClick={onClose}><X size={20} /></button>
         </div>
         <label>Goal name<input autoFocus required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. LeetCode sprint" /></label>
         <label>Why this matters <span>optional</span><textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="A short note to future you" /></label>
-        <label>Due date<input type="date" required value={dueDate} min={`${month}-01`} max={monthEnd(month)} onChange={(event) => setDueDate(event.target.value)} /></label>
+        <div className="form-row">
+          <label>Goal month
+            <select value={goalMonth} onChange={(event) => {
+              const nextMonth = event.target.value
+              setGoalMonth(nextMonth)
+              setDueDate(monthEnd(nextMonth))
+            }}>
+              {months.map((key) => <option value={key} key={key}>{displayMonth(key)}</option>)}
+            </select>
+          </label>
+          <label>Due date<input type="date" required value={dueDate} min={`${goalMonth}-01`} max={monthEnd(goalMonth)} onChange={(event) => setDueDate(event.target.value)} /></label>
+        </div>
         <div className="milestone-header">
           <div><strong>Milestones</strong><span>Break the goal into measurable parts.</span></div>
-          <button type="button" className="text-button" onClick={() => setMetrics((items) => [...items, { id: uid(), label: '', target: 1 }])}><Plus size={15} /> Add</button>
+          <button type="button" className="text-button" onClick={() => setMetrics((items) => [...items, { id: uid(), label: '', target: 1, completed: 0 }])}><Plus size={15} /> Add</button>
         </div>
         <div className="draft-metrics">
           {metrics.map((metric, index) => (
@@ -238,7 +266,7 @@ function GoalModal({ month, onClose, onCreate }: { month: string; onClose: () =>
         </div>
         <div className="modal-actions">
           <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
-          <button className="primary-button" type="submit"><Plus size={17} /> Create goal</button>
+          <button className="primary-button" type="submit">{goal ? <Check size={17} /> : <Plus size={17} />} {goal ? 'Save changes' : 'Create goal'}</button>
         </div>
       </form>
     </div>
@@ -251,6 +279,7 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState(availableMonths[0])
   const [data, setData] = useState<GoalData | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [saved, setSaved] = useState(true)
 
   useEffect(() => {
@@ -285,8 +314,20 @@ export default function App() {
     }),
   }))
 
-  const createGoal = (goal: Goal) => {
-    setData((current) => current && ({ ...current, goals: [...current.goals, goal] }))
+  const saveGoal = (goal: Goal) => {
+    setData((current) => current && ({
+      ...current,
+      goals: current.goals.some((item) => item.id === goal.id)
+        ? current.goals.map((item) => item.id === goal.id ? goal : item)
+        : [...current.goals, goal],
+    }))
+    setSelectedMonth(goal.monthKey)
+    setEditingGoal(null)
+    setShowModal(false)
+  }
+
+  const closeModal = () => {
+    setEditingGoal(null)
     setShowModal(false)
   }
 
@@ -338,7 +379,7 @@ export default function App() {
             <div className="heading-actions">
               <button className="month-arrow" disabled={selectedIndex === 0} onClick={() => setSelectedMonth(availableMonths[selectedIndex - 1])}><ChevronLeft size={18} /></button>
               <button className="month-arrow" disabled={selectedIndex === availableMonths.length - 1} onClick={() => setSelectedMonth(availableMonths[selectedIndex + 1])}><ChevronRight size={18} /></button>
-              <button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add goal</button>
+              <button className="primary-button" onClick={() => { setEditingGoal(null); setShowModal(true) }}><Plus size={18} /> Add goal</button>
             </div>
           </section>
 
@@ -353,10 +394,10 @@ export default function App() {
           <div className="dashboard-grid">
             <section className="goals-column">
               <div className="section-heading"><div><p className="eyebrow">Your goals</p><h2>In progress</h2></div><span>{goals.length} total</span></div>
-              {goals.length ? goals.map((goal) => <GoalCard key={goal.id} goal={goal} onStep={stepMetric} onDelete={deleteGoal} />) : (
+              {goals.length ? goals.map((goal) => <GoalCard key={goal.id} goal={goal} onStep={stepMetric} onEdit={(item) => { setEditingGoal(item); setShowModal(true) }} onDelete={deleteGoal} />) : (
                 <div className="empty-state">
                   <div><Target size={25} /></div><h3>No goals here yet</h3><p>Choose one meaningful outcome and give it a measurable finish line.</p>
-                  <button className="primary-button" onClick={() => setShowModal(true)}><Plus size={17} /> Add your first goal</button>
+                  <button className="primary-button" onClick={() => { setEditingGoal(null); setShowModal(true) }}><Plus size={17} /> Add your first goal</button>
                 </div>
               )}
             </section>
@@ -375,7 +416,7 @@ export default function App() {
           </div>
         </div>
       </main>
-      {showModal && <GoalModal month={selectedMonth} onClose={() => setShowModal(false)} onCreate={createGoal} />}
+      {showModal && <GoalModal month={selectedMonth} months={availableMonths} goal={editingGoal ?? undefined} onClose={closeModal} onSave={saveGoal} />}
     </div>
   )
 }

@@ -98,6 +98,8 @@ main { grid-column: 2; min-width: 0; }
 .complete-label { display: inline-flex; align-items: center; gap: 3px; color: #4b7257; background: #eaf0e4; border-radius: 10px; padding: 3px 7px; font-size: 9px; font-weight: 700; }
 .menu-button { opacity: .45; border-color: transparent; background: transparent; }
 .menu-button:hover { opacity: 1; color: #a14b35; background: #f7eae5; }
+.goal-actions { display: flex; align-items: center; gap: 2px; }
+.goal-actions .edit-button:hover { color: var(--sage-dark); background: #e9eee7; }
 .metric-list { border-top: 1px solid #ebe8e0; padding: 10px 20px 12px 106px; display: grid; gap: 8px; }
 .metric { display: grid; grid-template-columns: 145px minmax(70px, 1fr) auto; gap: 13px; align-items: center; min-height: 31px; }
 .metric-copy { display: flex; align-items: baseline; justify-content: space-between; gap: 7px; min-width: 0; }
@@ -149,10 +151,11 @@ blockquote cite { display: block; margin-top: 8px; color: #969b95; font-family: 
 .modal { width: min(560px, 100%); max-height: calc(100vh - 48px); overflow: auto; background: var(--paper); border-radius: 18px; padding: 25px; box-shadow: 0 25px 80px rgba(27,35,29,.24); }
 .modal-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 22px; }
 .modal-header h2 { font-family: Georgia, 'Times New Roman', serif; font-size: 28px; margin: 0; }
-.modal > label { display: grid; gap: 7px; margin-bottom: 15px; font-size: 10px; color: #555d56; font-weight: 700; }
+.modal > label, .form-row label { display: grid; gap: 7px; margin-bottom: 15px; font-size: 10px; color: #555d56; font-weight: 700; }
 .modal > label > span { color: #9a9e98; font-weight: 400; margin-left: 4px; }
-.modal input, .modal textarea { width: 100%; border: 1px solid #d9d6cd; border-radius: 9px; background: white; padding: 10px 12px; color: var(--ink); font-size: 12px; }
+.modal input, .modal textarea, .modal select { width: 100%; border: 1px solid #d9d6cd; border-radius: 9px; background: white; padding: 10px 12px; color: var(--ink); font-size: 12px; }
 .modal textarea { min-height: 67px; resize: vertical; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .milestone-header { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e5e2da; padding-top: 17px; margin-top: 20px; }
 .milestone-header > div { display: grid; gap: 3px; }
 .milestone-header strong { font-size: 11px; }
