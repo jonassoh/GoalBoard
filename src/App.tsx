@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { CSSProperties, FormEvent, useEffect, useMemo, useState } from 'react'
 import {
   ArrowRight,
   CalendarDays,
@@ -12,12 +12,13 @@ import {
   Minus,
   Pencil,
   Plus,
+  Tags,
   Target,
   Trash2,
   X,
 } from 'lucide-react'
 import { loadData, saveData } from './storage'
-import type { Goal, GoalData, Metric } from './types'
+import type { Category, Goal, GoalData } from './types'
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -58,27 +59,35 @@ const daysUntil = (dateString: string) => {
 function starterData(): GoalData {
   const current = monthKey(new Date())
   const next = monthKey(addMonths(new Date(), 1))
-  const create = (title: string, note: string, key: string, metrics: Array<[string, number, number]>): Goal => ({
+  const categories: Category[] = [
+    { id: uid(), name: 'Learning', color: '#647768' },
+    { id: uid(), name: 'Health', color: '#d76f51' },
+    { id: uid(), name: 'Personal', color: '#8a70a5' },
+    { id: uid(), name: 'Work', color: '#507ca4' },
+  ]
+  const create = (title: string, note: string, key: string, categoryId: string, metrics: Array<[string, number, number]>): Goal => ({
     id: uid(),
     title,
     note,
     monthKey: key,
     dueDate: monthEnd(key),
     createdAt: new Date().toISOString(),
+    categoryId,
     metrics: metrics.map(([label, target, completed]) => ({ id: uid(), label, target, completed })),
   })
 
   return {
-    version: 1,
+    version: 2,
+    categories,
     goals: [
-      create('LeetCode sprint', 'Build consistency across every difficulty.', current, [
+      create('LeetCode sprint', 'Build consistency across every difficulty.', current, categories[0].id, [
         ['Hard', 5, 2],
         ['Medium', 10, 7],
         ['Easy', 20, 14],
       ]),
-      create('Run 50 kilometers', 'Three steady runs each week.', current, [['Kilometers', 50, 31]]),
-      create('Finish my reading list', 'A chapter before bed, phone away.', current, [['Books', 3, 1]]),
-      create('Ship the side project', 'One small, useful release.', next, [['Milestones', 8, 0]]),
+      create('Run 50 kilometers', 'Three steady runs each week.', current, categories[1].id, [['Kilometers', 50, 31]]),
+      create('Finish my reading list', 'A chapter before bed, phone away.', current, categories[2].id, [['Books', 3, 1]]),
+      create('Ship the side project', 'One small, useful release.', next, categories[3].id, [['Milestones', 8, 0]]),
     ],
   }
 }
@@ -143,20 +152,25 @@ function MiniCalendar({ selectedKey, dueDays }: { selectedKey: string; dueDays: 
   )
 }
 
-function GoalCard({ goal, onStep, onEdit, onDelete }: {
+function GoalCard({ goal, category, onStep, onEdit, onDelete }: {
   goal: Goal
+  category?: Category
   onStep: (goalId: string, metricId: string, delta: number) => void
   onEdit: (goal: Goal) => void
   onDelete: (goalId: string) => void
 }) {
   const progress = goalProgress(goal)
   return (
-    <article className={`goal-card ${progress === 100 ? 'complete' : ''}`}>
+    <article
+      className={`goal-card ${progress === 100 ? 'complete' : ''}`}
+      style={{ '--category-color': category?.color ?? '#647768' } as CSSProperties}
+    >
       <div className="goal-card-top">
         <ProgressRing value={progress} />
         <div className="goal-heading">
           <div className="goal-title-row">
             <h3>{goal.title}</h3>
+            <span className="category-chip"><i />{category?.name ?? 'Uncategorized'}</span>
             {progress === 100 && <span className="complete-label"><Check size={13} /> Complete</span>}
           </div>
           <p>{goal.note || 'A little progress still counts.'}</p>
@@ -198,9 +212,10 @@ function GoalCard({ goal, onStep, onEdit, onDelete }: {
 
 type DraftMetric = { id: string; label: string; target: number; completed: number }
 
-function GoalModal({ month, months, goal, onClose, onSave }: {
+function GoalModal({ month, months, categories, goal, onClose, onSave }: {
   month: string
   months: string[]
+  categories: Category[]
   goal?: Goal
   onClose: () => void
   onSave: (goal: Goal) => void
@@ -209,6 +224,7 @@ function GoalModal({ month, months, goal, onClose, onSave }: {
   const [note, setNote] = useState(goal?.note ?? '')
   const [goalMonth, setGoalMonth] = useState(goal?.monthKey ?? month)
   const [dueDate, setDueDate] = useState(goal?.dueDate ?? monthEnd(month))
+  const [categoryId, setCategoryId] = useState(goal?.categoryId ?? '')
   const [metrics, setMetrics] = useState<DraftMetric[]>(goal?.metrics.map((metric) => ({ ...metric })) ?? [{ id: uid(), label: '', target: 1, completed: 0 }])
 
   const submit = (event: FormEvent) => {
@@ -218,6 +234,7 @@ function GoalModal({ month, months, goal, onClose, onSave }: {
     onSave({
       id: goal?.id ?? uid(), title: title.trim(), note: note.trim(), monthKey: goalMonth, dueDate,
       createdAt: goal?.createdAt ?? new Date().toISOString(),
+      categoryId: categoryId || undefined,
       metrics: validMetrics.map((metric) => ({
         ...metric,
         label: metric.label.trim(),
@@ -238,6 +255,12 @@ function GoalModal({ month, months, goal, onClose, onSave }: {
         </div>
         <label>Goal name<input autoFocus required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. LeetCode sprint" /></label>
         <label>Why this matters <span>optional</span><textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="A short note to future you" /></label>
+        <label>Category
+          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+            <option value="">Uncategorized</option>
+            {categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}
+          </select>
+        </label>
         <div className="form-row">
           <label>Goal month
             <select value={goalMonth} onChange={(event) => {
@@ -273,17 +296,87 @@ function GoalModal({ month, months, goal, onClose, onSave }: {
   )
 }
 
+function CategoryModal({ categories, onClose, onSave }: {
+  categories: Category[]
+  onClose: () => void
+  onSave: (categories: Category[]) => void
+}) {
+  const palette = [
+    '#647768', // sage
+    '#d76f51', // coral
+    '#507ca4', // blue
+    '#8a70a5', // purple
+    '#c1953e', // ochre
+    '#3d8b86', // teal
+    '#b85d78', // berry
+    '#6579b8', // indigo
+    '#d64545', // red
+    '#e3c441', // yellow
+    '#8b5e3c', // brown
+    '#202020', // black
+    '#f8f7f2', // white
+    '#e98bad', // pink
+    '#43c6db', // cyan
+    '#9ad58b', // light green
+  ]
+  const [drafts, setDrafts] = useState<Category[]>(categories.map((category) => ({ ...category })))
+  const update = (id: string, values: Partial<Category>) => setDrafts((items) => items.map((item) => item.id === id ? { ...item, ...values } : item))
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    const valid = drafts.filter((category) => category.name.trim()).map((category) => ({ ...category, name: category.name.trim() }))
+    onSave(valid)
+  }
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <form className="modal category-modal" onSubmit={submit}>
+        <div className="modal-header">
+          <div><p className="eyebrow">Organize your board</p><h2>Categories</h2></div>
+          <button type="button" className="icon-button" onClick={onClose}><X size={20} /></button>
+        </div>
+        <p className="category-intro">Create categories for the different areas of your life. Changing a color updates every goal assigned to it.</p>
+        <div className="category-editor-list">
+          {drafts.map((category) => (
+            <div className="category-editor" key={category.id} style={{ '--draft-color': category.color } as CSSProperties}>
+              <label className="color-picker" title="Choose custom color">
+                <i />
+                <input aria-label={`${category.name || 'New category'} color`} type="color" value={category.color} onChange={(event) => update(category.id, { color: event.target.value })} />
+              </label>
+              <input aria-label="Category name" required value={category.name} onChange={(event) => update(category.id, { name: event.target.value })} placeholder="Category name" />
+              <div className="color-swatches">
+                {palette.map((color) => <button aria-label={`Use color ${color}`} type="button" className={category.color.toLowerCase() === color ? 'active' : ''} style={{ backgroundColor: color }} onClick={() => update(category.id, { color })} key={color} />)}
+              </div>
+              <button type="button" className="icon-button category-delete" aria-label={`Delete ${category.name || 'category'}`} onClick={() => setDrafts((items) => items.filter((item) => item.id !== category.id))}><Trash2 size={16} /></button>
+            </div>
+          ))}
+        </div>
+        <button type="button" className="add-category-button" onClick={() => setDrafts((items) => [...items, { id: uid(), name: '', color: palette[items.length % palette.length] }])}><Plus size={16} /> Add category</button>
+        <div className="modal-actions">
+          <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
+          <button className="primary-button" type="submit"><Check size={17} /> Save categories</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 export default function App() {
   const today = useMemo(() => new Date(), [])
   const availableMonths = useMemo(() => Array.from({ length: 12 }, (_, index) => monthKey(addMonths(today, index))), [today])
   const [selectedMonth, setSelectedMonth] = useState(availableMonths[0])
   const [data, setData] = useState<GoalData | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [showCategories, setShowCategories] = useState(false)
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState('all')
   const [saved, setSaved] = useState(true)
 
   useEffect(() => {
-    loadData().then((stored) => setData(stored?.version === 1 ? stored : starterData()))
+    loadData().then((stored) => {
+      if (!stored) return setData(starterData())
+      const legacy = stored as GoalData & { version: number; categories?: Category[] }
+      setData({ version: 2, goals: legacy.goals ?? [], categories: legacy.categories ?? [] })
+    })
   }, [])
 
   useEffect(() => {
@@ -295,14 +388,21 @@ export default function App() {
 
   if (!data) return <div className="loading"><Target size={30} /> Opening your board…</div>
 
-  const goals = data.goals.filter((goal) => goal.monthKey === selectedMonth)
+  const monthGoals = data.goals.filter((goal) => goal.monthKey === selectedMonth)
+  const goals = monthGoals
+    .filter((goal) => categoryFilter === 'all' || (categoryFilter === 'uncategorized' ? !goal.categoryId : goal.categoryId === categoryFilter))
+    .sort((a, b) => {
+      const aIndex = data.categories.findIndex((category) => category.id === a.categoryId)
+      const bIndex = data.categories.findIndex((category) => category.id === b.categoryId)
+      return (aIndex < 0 ? 999 : aIndex) - (bIndex < 0 ? 999 : bIndex)
+    })
   const selectedIndex = availableMonths.indexOf(selectedMonth)
   const nextMonth = availableMonths[selectedIndex + 1]
   const nextGoals = nextMonth ? data.goals.filter((goal) => goal.monthKey === nextMonth) : []
-  const totalTarget = goals.flatMap((goal) => goal.metrics).reduce((sum, metric) => sum + metric.target, 0)
-  const totalDone = goals.flatMap((goal) => goal.metrics).reduce((sum, metric) => sum + Math.min(metric.completed, metric.target), 0)
+  const totalTarget = monthGoals.flatMap((goal) => goal.metrics).reduce((sum, metric) => sum + metric.target, 0)
+  const totalDone = monthGoals.flatMap((goal) => goal.metrics).reduce((sum, metric) => sum + Math.min(metric.completed, metric.target), 0)
   const overall = totalTarget ? Math.round(totalDone / totalTarget * 100) : 0
-  const dueDays = goals.map((goal) => Number(goal.dueDate.split('-')[2]))
+  const dueDays = monthGoals.map((goal) => Number(goal.dueDate.split('-')[2]))
 
   const stepMetric = (goalId: string, metricId: string, delta: number) => setData((current) => current && ({
     ...current,
@@ -331,6 +431,17 @@ export default function App() {
     setShowModal(false)
   }
 
+  const saveCategories = (categories: Category[]) => {
+    const validIds = new Set(categories.map((category) => category.id))
+    setData((current) => current && ({
+      ...current,
+      categories,
+      goals: current.goals.map((goal) => goal.categoryId && !validIds.has(goal.categoryId) ? { ...goal, categoryId: undefined } : goal),
+    }))
+    if (categoryFilter !== 'all' && categoryFilter !== 'uncategorized' && !validIds.has(categoryFilter)) setCategoryFilter('all')
+    setShowCategories(false)
+  }
+
   const deleteGoal = (goalId: string) => {
     if (window.confirm('Remove this goal from your board?')) {
       setData((current) => current && ({ ...current, goals: current.goals.filter((goal) => goal.id !== goalId) }))
@@ -343,6 +454,7 @@ export default function App() {
         <div className="brand"><span><Target size={21} /></span><strong>GoalBoard</strong></div>
         <nav className="main-nav">
           <button className="active"><Home size={18} /> Home</button>
+          <button onClick={() => setShowCategories(true)}><Tags size={18} /> Categories</button>
         </nav>
         <div className="months-heading"><span>Plan ahead</span><span>12 mo.</span></div>
         <nav className="month-nav">
@@ -374,7 +486,7 @@ export default function App() {
             <div>
               <p className="eyebrow">Monthly focus</p>
               <h1>{selectedMonth === availableMonths[0] ? 'Make this month count.' : `Plan for ${displayMonth(selectedMonth, 'short')}.`}</h1>
-              <p>{goals.length ? `${goals.length} active goal${goals.length === 1 ? '' : 's'} · ${totalDone} of ${totalTarget} milestones complete` : 'A fresh month, ready for a clear direction.'}</p>
+              <p>{monthGoals.length ? `${monthGoals.length} active goal${monthGoals.length === 1 ? '' : 's'} · ${totalDone} of ${totalTarget} milestones complete` : 'A fresh month, ready for a clear direction.'}</p>
             </div>
             <div className="heading-actions">
               <button className="month-arrow" disabled={selectedIndex === 0} onClick={() => setSelectedMonth(availableMonths[selectedIndex - 1])}><ChevronLeft size={18} /></button>
@@ -393,8 +505,18 @@ export default function App() {
 
           <div className="dashboard-grid">
             <section className="goals-column">
-              <div className="section-heading"><div><p className="eyebrow">Your goals</p><h2>In progress</h2></div><span>{goals.length} total</span></div>
-              {goals.length ? goals.map((goal) => <GoalCard key={goal.id} goal={goal} onStep={stepMetric} onEdit={(item) => { setEditingGoal(item); setShowModal(true) }} onDelete={deleteGoal} />) : (
+              <div className="section-heading"><div><p className="eyebrow">Your goals</p><h2>In progress</h2></div><span>{monthGoals.length} total</span></div>
+              <div className="category-filters">
+                <button className={categoryFilter === 'all' ? 'active' : ''} onClick={() => setCategoryFilter('all')}>All</button>
+                {data.categories.map((category) => (
+                  <button className={categoryFilter === category.id ? 'active' : ''} onClick={() => setCategoryFilter(category.id)} key={category.id} style={{ '--filter-color': category.color } as CSSProperties}><i />{category.name}</button>
+                ))}
+                {monthGoals.some((goal) => !goal.categoryId) && <button className={categoryFilter === 'uncategorized' ? 'active' : ''} onClick={() => setCategoryFilter('uncategorized')}><i />Uncategorized</button>}
+                <button className="manage-categories" onClick={() => setShowCategories(true)}><Plus size={13} /> Manage</button>
+              </div>
+              {goals.length ? goals.map((goal) => <GoalCard key={goal.id} goal={goal} category={data.categories.find((category) => category.id === goal.categoryId)} onStep={stepMetric} onEdit={(item) => { setEditingGoal(item); setShowModal(true) }} onDelete={deleteGoal} />) : monthGoals.length ? (
+                <div className="filtered-empty"><Tags size={22} /><p>No goals in this category for {displayMonth(selectedMonth, 'short')}.</p><button onClick={() => setCategoryFilter('all')}>Show all goals</button></div>
+              ) : (
                 <div className="empty-state">
                   <div><Target size={25} /></div><h3>No goals here yet</h3><p>Choose one meaningful outcome and give it a measurable finish line.</p>
                   <button className="primary-button" onClick={() => { setEditingGoal(null); setShowModal(true) }}><Plus size={17} /> Add your first goal</button>
@@ -416,7 +538,8 @@ export default function App() {
           </div>
         </div>
       </main>
-      {showModal && <GoalModal month={selectedMonth} months={availableMonths} goal={editingGoal ?? undefined} onClose={closeModal} onSave={saveGoal} />}
+      {showModal && <GoalModal month={selectedMonth} months={availableMonths} categories={data.categories} goal={editingGoal ?? undefined} onClose={closeModal} onSave={saveGoal} />}
+      {showCategories && <CategoryModal categories={data.categories} onClose={() => setShowCategories(false)} onSave={saveCategories} />}
     </div>
   )
 }

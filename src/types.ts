@@ -13,9 +13,17 @@ export type Goal = {
   dueDate: string
   metrics: Metric[]
   createdAt: string
+  categoryId?: string
+}
+
+export type Category = {
+  id: string
+  name: string
+  color: string
 }
 
 export type GoalData = {
-  version: 1
+  version: 2
   goals: Goal[]
+  categories: Category[]
 }
