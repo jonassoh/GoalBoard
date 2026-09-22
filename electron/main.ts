@@ -4,7 +4,10 @@ import path from 'path'
 
 const isDev = !app.isPackaged
 
-const dataFile = () => path.join(app.getPath('userData'), 'goalboard-data.json')
+const dataFile = (accountId: string) => {
+  const safeAccountId = accountId.replace(/[^a-zA-Z0-9_-]/g, '')
+  return path.join(app.getPath('userData'), `goalboard-data-${safeAccountId}.json`)
+}
 
 async function createWindow() {
   const window = new BrowserWindow({
@@ -25,17 +28,29 @@ async function createWindow() {
   else await window.loadFile(path.join(__dirname, '../dist/index.html'))
 }
 
-ipcMain.handle('goals:load', async () => {
+ipcMain.handle('goals:load', async (_event, accountId: string) => {
+  const accountFile = dataFile(accountId)
   try {
-    return JSON.parse(await fs.readFile(dataFile(), 'utf8'))
+    return JSON.parse(await fs.readFile(accountFile, 'utf8'))
   } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.error(error)
-    return null
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error(error)
+      return null
+    }
+    try {
+      const legacyFile = path.join(app.getPath('userData'), 'goalboard-data.json')
+      const legacyData = await fs.readFile(legacyFile, 'utf8')
+      await fs.rename(legacyFile, accountFile)
+      return JSON.parse(legacyData)
+    } catch (legacyError: unknown) {
+      if ((legacyError as NodeJS.ErrnoException).code !== 'ENOENT') console.error(legacyError)
+      return null
+    }
   }
 })
 
-ipcMain.handle('goals:save', async (_event, data: unknown) => {
-  const file = dataFile()
+ipcMain.handle('goals:save', async (_event, accountId: string, data: unknown) => {
+  const file = dataFile(accountId)
   const temp = `${file}.tmp`
   await fs.mkdir(path.dirname(file), { recursive: true })
   await fs.writeFile(temp, JSON.stringify(data, null, 2), 'utf8')

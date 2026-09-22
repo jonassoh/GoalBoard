@@ -3,8 +3,8 @@
 declare global {
   interface Window {
     goalboard?: {
-      load: () => Promise<unknown>
-      save: (data: unknown) => Promise<boolean>
+      load: (accountId: string) => Promise<unknown>
+      save: (accountId: string, data: unknown) => Promise<boolean>
     }
   }
 }

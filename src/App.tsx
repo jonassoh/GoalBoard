@@ -10,15 +10,21 @@ import {
   Copy,
   Flame,
   Home,
+  LockKeyhole,
+  LogOut,
+  Mail,
   Minus,
   Pencil,
   Plus,
   Tags,
   Target,
   Trash2,
+  UserRound,
   X,
 } from 'lucide-react'
+import type { User } from '@supabase/supabase-js'
 import { loadData, saveData } from './storage'
+import { isSupabaseConfigured, loadCloudData, saveCloudData, supabase } from './supabase'
 import type { Category, Goal, GoalData } from './types'
 
 const uid = () =>
@@ -58,6 +64,12 @@ const goalProgress = (goal: Goal) => {
 const daysUntil = (dateString: string) => {
   const due = new Date(`${dateString}T23:59:59`)
   return Math.max(0, Math.ceil((due.getTime() - Date.now()) / 86_400_000))
+}
+
+const normalizeData = (stored: GoalData | null): GoalData | null => {
+  if (!stored) return null
+  const legacy = stored as GoalData & { version: number; categories?: Category[] }
+  return { version: 2, goals: legacy.goals ?? [], categories: legacy.categories ?? [] }
 }
 
 function starterData(): GoalData {
@@ -372,7 +384,107 @@ function CategoryModal({ categories, onClose, onSave }: {
   )
 }
 
-export default function App() {
+function AuthScreen() {
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const changeMode = (nextMode: 'login' | 'signup') => {
+    setMode(nextMode)
+    setError('')
+    setMessage('')
+  }
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setError('')
+    setMessage('')
+    if (!supabase) return setError('Account services have not been configured yet.')
+    if (mode === 'signup' && password !== confirmPassword) return setError('Passwords do not match.')
+    if (password.length < 8) return setError('Use at least 8 characters for your password.')
+    setSubmitting(true)
+    try {
+      if (mode === 'signup') {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { full_name: name.trim() },
+            emailRedirectTo: window.location.origin,
+          },
+        })
+        if (signUpError) throw signUpError
+        if (!data.session) setMessage('Check your email to confirm your account, then sign in.')
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+        if (signInError) throw signInError
+      }
+    } catch (authError: unknown) {
+      setError(authError instanceof Error ? authError.message : 'Unable to continue. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="auth-shell">
+        <section className="auth-story">
+          <div className="auth-brand"><Target size={22} /><strong>GoalBoard</strong></div>
+          <div><p className="eyebrow">One account. Every goal.</p><h1>Your plans,<br />wherever you are.</h1><p>Keep monthly goals synced across devices while retaining a local offline copy.</p></div>
+          <span>Private by design · Offline ready</span>
+        </section>
+        <section className="auth-panel config-panel">
+          <div className="config-icon"><LockKeyhole size={24} /></div>
+          <p className="eyebrow">Setup required</p>
+          <h2>Connect account storage</h2>
+          <p>Add your Supabase project URL and publishable key to the Vercel environment variables, then redeploy.</p>
+          <code>VITE_SUPABASE_URL</code>
+          <code>VITE_SUPABASE_PUBLISHABLE_KEY</code>
+          <small>See <strong>.env.example</strong> and <strong>supabase/schema.sql</strong> in the project.</small>
+        </section>
+      </div>
+    )
+  }
+
+  return (
+    <div className="auth-shell">
+      <section className="auth-story">
+        <div className="auth-brand"><Target size={22} /><strong>GoalBoard</strong></div>
+        <div><p className="eyebrow">One account. Every goal.</p><h1>Your plans,<br />wherever you are.</h1><p>Keep monthly goals synced across devices while retaining a local offline copy.</p></div>
+        <span>Private by design · Offline ready</span>
+      </section>
+      <section className="auth-panel">
+        <div className="auth-form-wrap">
+          <p className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Start planning'}</p>
+          <h2>{mode === 'login' ? 'Sign in to GoalBoard' : 'Create your account'}</h2>
+          <p className="auth-subtitle">{mode === 'login' ? 'Pick up exactly where you left off.' : 'Your goals will be private and available on every device.'}</p>
+          <div className="auth-tabs">
+            <button className={mode === 'login' ? 'active' : ''} onClick={() => changeMode('login')}>Log in</button>
+            <button className={mode === 'signup' ? 'active' : ''} onClick={() => changeMode('signup')}>Sign up</button>
+          </div>
+          <form className="auth-form" onSubmit={submit}>
+            {mode === 'signup' && <label>Full name<div><UserRound size={17} /><input required autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Alex Morgan" /></div></label>}
+            <label>Email address<div><Mail size={17} /><input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></div></label>
+            <label>Password<div><LockKeyhole size={17} /><input required minLength={8} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" /></div></label>
+            {mode === 'signup' && <label>Confirm password<div><LockKeyhole size={17} /><input required minLength={8} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat your password" /></div></label>}
+            {error && <div className="auth-alert error">{error}</div>}
+            {message && <div className="auth-alert success"><Check size={16} />{message}</div>}
+            <button className="auth-submit" disabled={submitting}>{submitting ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'}<ArrowRight size={17} /></button>
+          </form>
+          <p className="auth-switch">{mode === 'login' ? 'New to GoalBoard?' : 'Already have an account?'} <button onClick={() => changeMode(mode === 'login' ? 'signup' : 'login')}>{mode === 'login' ? 'Create an account' : 'Log in'}</button></p>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function Dashboard({ user, onSignOut }: { user: User; onSignOut: () => Promise<void> }) {
   const today = useMemo(() => new Date(), [])
   const availableMonths = useMemo(() => Array.from({ length: 12 }, (_, index) => monthKey(addMonths(today, index))), [today])
   const [selectedMonth, setSelectedMonth] = useState(availableMonths[0])
@@ -382,22 +494,42 @@ export default function App() {
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [duplicating, setDuplicating] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState('all')
-  const [saved, setSaved] = useState(true)
+  const [syncStatus, setSyncStatus] = useState<'saved' | 'saving' | 'offline'>('saving')
+  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    loadData().then((stored) => {
-      if (!stored) return setData(starterData())
-      const legacy = stored as GoalData & { version: number; categories?: Category[] }
-      setData({ version: 2, goals: legacy.goals ?? [], categories: legacy.categories ?? [] })
-    })
-  }, [])
+    let active = true
+    const hydrate = async () => {
+      const cached = normalizeData(await loadData(user.id))
+      if (active && cached) setData(cached)
+      try {
+        const cloud = normalizeData(await loadCloudData(user.id))
+        if (!active) return
+        setData(cloud ?? cached ?? starterData())
+        setSyncStatus('saved')
+      } catch {
+        if (!active) return
+        setData(cached ?? starterData())
+        setSyncStatus('offline')
+      } finally {
+        if (active) setHydrated(true)
+      }
+    }
+    hydrate()
+    return () => { active = false }
+  }, [user.id])
 
   useEffect(() => {
-    if (!data) return
-    setSaved(false)
-    const timer = window.setTimeout(() => saveData(data).then(() => setSaved(true)), 180)
+    if (!data || !hydrated) return
+    setSyncStatus('saving')
+    saveData(user.id, data).catch(() => undefined)
+    const timer = window.setTimeout(() => {
+      saveCloudData(user.id, data)
+        .then(() => setSyncStatus('saved'))
+        .catch(() => setSyncStatus('offline'))
+    }, 650)
     return () => window.clearTimeout(timer)
-  }, [data])
+  }, [data, hydrated, user.id])
 
   if (!data) return <div className="loading"><Target size={30} /> Opening your board…</div>
 
@@ -484,7 +616,7 @@ export default function App() {
             )
           })}
         </nav>
-        <div className="offline-note"><CloudOff size={16} /><div><strong>Offline ready</strong><span>{saved ? 'All changes saved' : 'Saving changes…'}</span></div></div>
+        <div className="offline-note"><CloudOff size={16} /><div><strong>{syncStatus === 'offline' ? 'Working offline' : 'Cloud connected'}</strong><span>{syncStatus === 'saved' ? 'All changes synced' : syncStatus === 'saving' ? 'Saving changes…' : 'Saved on this device'}</span></div></div>
       </aside>
 
       <main>
@@ -492,7 +624,9 @@ export default function App() {
           <div className="breadcrumb"><span>Home</span><ChevronRight size={14} /><strong>{displayMonth(selectedMonth)}</strong></div>
           <div className="top-actions">
             <button className="icon-button" aria-label="Help"><CircleHelp size={18} /></button>
-            <div className="avatar">JS</div>
+            <div className="account-copy"><strong>{user.user_metadata.full_name || user.email?.split('@')[0] || 'Account'}</strong><span>{user.email}</span></div>
+            <div className="avatar">{(user.user_metadata.full_name || user.email || 'U').split(/\s|@/).filter(Boolean).slice(0, 2).map((part: string) => part[0]).join('').toUpperCase()}</div>
+            <button className="icon-button signout-button" aria-label="Sign out" title="Sign out" onClick={() => void onSignOut()}><LogOut size={17} /></button>
           </div>
         </header>
 
@@ -566,4 +700,27 @@ export default function App() {
       {showCategories && <CategoryModal categories={data.categories} onClose={() => setShowCategories(false)} onSave={saveCategories} />}
     </div>
   )
+}
+
+export default function App() {
+  const [user, setUser] = useState<User | null>(null)
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
+
+  useEffect(() => {
+    if (!supabase) return
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null)
+      setAuthReady(true)
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      setAuthReady(true)
+    })
+    return () => listener.subscription.unsubscribe()
+  }, [])
+
+  if (!authReady) return <div className="loading"><Target size={30} /> Securing your board…</div>
+  if (!user) return <AuthScreen />
+
+  return <Dashboard key={user.id} user={user} onSignOut={async () => { await supabase?.auth.signOut() }} />
 }
