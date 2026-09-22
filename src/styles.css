@@ -168,6 +168,7 @@ blockquote cite { display: block; margin-top: 8px; color: #969b95; font-family: 
 .modal input, .modal textarea, .modal select { width: 100%; border: 1px solid #d9d6cd; border-radius: 9px; background: white; padding: 10px 12px; color: var(--ink); font-size: 12px; }
 .modal textarea { min-height: 67px; resize: vertical; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.date-hint { margin: -8px 0 16px; color: #8b9089; font-size: 9px; }
 .category-intro { color: var(--muted); font-size: 11px; line-height: 1.55; margin: -9px 0 18px; }
 .category-editor-list { display: grid; gap: 8px; }
 .category-editor { display: grid; grid-template-columns: 34px minmax(120px, 1fr) auto 35px; gap: 8px; align-items: center; padding: 8px; border: 1px solid #e3e0d7; border-radius: 11px; background: #faf9f5; }
